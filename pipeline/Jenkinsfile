@@ -10,7 +10,8 @@ podTemplate(
 	],
 	//volume mount
 	volumes: [
-		hostPathVolume(hostPath: "/var/run/docker.sock", mountPath: "/var/run/docker.sock")
+		hostPathVolume(hostPath: "/var/run/docker.sock", mountPath: "/var/run/docker.sock"),
+                secretVolume(secretName: 'kube-config', namespace: 'inho-cho', mountPath: '/root/.kube')
 	]
 ) 
 {
