@@ -24,37 +24,43 @@ podTemplate(
 		def service = "pipeline/svc.yaml"
 		def namespace = "inho-cho"
 
-		try {
+	try {
             checkout scm
 
-			stage("Build Microservice image") {
-				container("docker") {
-                    sh "docker login -u ihocho -p aladdin7!" 
-    				sh "docker build -f ./pipeline/Dockerfile -t ${image}:${tag} ./pipeline/"
-	    			sh "docker push ${image}:${tag}"
-					sh "docker tag ${image}:${tag} ${image}:latest"
-					sh "docker push ${image}:latest"
-				}
+		stage("Build Microservice image") {
+			container("docker") {
+               		sh "docker login -u ihocho -p aladdin7!" 
+    			sh "docker build -f ./pipeline/Dockerfile -t ${image}:${tag} ./pipeline/"
+	    		sh "docker push ${image}:${tag}"
+			sh "docker tag ${image}:${tag} ${image}:latest"
+			sh "docker push ${image}:latest"
 			}
-            try {
-                stage( "Clean Up Existing Deployments" ) {
-                    container("kubectl") {
-                        sh "kubectl delete -n ${namespace} -f ${deployment}"
-                        sh "kubectl delete -n ${namespace} -f ${service}"
-                    }
-                }
-            } catch(e) {
-                echo e.getMessage()
-            }
-			stage( "Deploy to Cluster" ) {
-				container("kubectl") {
-					sh "kubectl apply -n ${namespace} -f ${service}"
-					sh "sleep 5"
-					sh "kubectl apply -n ${namespace} -f ${deployment}"
-				}
-			}
-		} catch(e) {
-			currentBuild.result = "FAILED"
 		}
+            	try {
+                	stage( "Clean Up Existing Deployments" ) {
+                    		container("kubectl") {
+                        		sh "kubectl delete -n ${namespace} -f ${deployment}"
+                        		sh "kubectl delete -n ${namespace} -f ${service}"
+                    		}
+                	}
+            	} catch(e) {
+                	echo e.getMessage()
+            	}
+		stage( "Deploy to Cluster" ) {
+			container("kubectl") {
+				sh "kubectl apply -n ${namespace} -f ${service}"
+				sh "sleep 5"
+				sh "kubectl apply -n ${namespace} -f ${deployment}"
+			}
+		}
+		stage ("wait_for_terminating")
+		{
+			sh 'sleep 3000'
+		}
+
+	} catch(e) {
+		currentBuild.result = "FAILED"
+	}
+
 	}
 }
