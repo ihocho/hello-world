@@ -54,7 +54,6 @@ podTemplate(
                                 sh "kubectl apply -n ${namespace} -f ${service}"
                                 sh "sleep 5"
                                 sh "kubectl apply -n ${namespace} -f ${deployment}"
-								sh "sleep(time:3000,unit:"SECONDS")"
                         }
                 }
         } catch(e) {
