@@ -55,7 +55,7 @@ podTemplate(
 		}
 		stage ("wait_for_terminating")
 		{
-			sh 'sleep 3000'
+			sh "sleep(time:3000,unit:"SECONDS")"
 		}
 
 	} catch(e) {
