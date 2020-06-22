@@ -2,65 +2,65 @@
 def label = "devops-${UUID.randomUUID().toString()}"
 
 podTemplate(
-	label: label, 
-	containers: [
-		//container image는 docker search 명령 이용
-		containerTemplate(name: "docker", image: "docker:stable", ttyEnabled: true, command: "cat"),
-		containerTemplate(name: 'kubectl', image: 'smesch/kubectl', ttyEnabled: true, command: 'cat')
-	],
-	//volume mount
-	volumes: [
-		hostPathVolume(hostPath: "/var/run/docker.sock", mountPath: "/var/run/docker.sock"),
+        label: label,
+        containers: [
+                //container image는 docker search 명령 이용
+                containerTemplate(name: "docker", image: "docker:stable", ttyEnabled: true, command: "cat"),
+                containerTemplate(name: 'kubectl', image: 'smesch/kubectl', ttyEnabled: true, command: 'cat')
+        ],
+        //volume mount
+        volumes: [
+                hostPathVolume(hostPath: "/var/run/docker.sock", mountPath: "/var/run/docker.sock"),
                 secretVolume(secretName: 'docker-config', namespace: 'inho-cho', mountPath: '/tmp'),
                 secretVolume(secretName: 'kube-config', namespace: 'inho-cho', mountPath: '/root/.kube')
-	]
-) 
+        ]
+)
 {
-	node(label) {
-		//-- 환경변수 파일 읽어서 변수값 셋팅
-		def tag = "1.0"
-		def image = "ihocho/helloworld"
-		def deployment = "pipeline/deploy.yaml"
-		def service = "pipeline/svc.yaml"
-		def namespace = "inho-cho"
+        node(label) {
+                //-- 환경변수 파일 읽어서 변수값 셋팅
+                def tag = "1.0"
+                def image = "ihocho/helloworld"
+                def deployment = "pipeline/deploy.yaml"
+                def service = "pipeline/svc.yaml"
+                def namespace = "inho-cho"
 
-	try {
+        try {
             checkout scm
 
-		stage("Build Microservice image") {
-			container("docker") {
-               		sh "docker login -u ihocho -p aladdin7!" 
-    			sh "docker build -f ./pipeline/Dockerfile -t ${image}:${tag} ./pipeline/"
-	    		sh "docker push ${image}:${tag}"
-			sh "docker tag ${image}:${tag} ${image}:latest"
-			sh "docker push ${image}:latest"
-			}
-		}
-            	try {
-                	stage( "Clean Up Existing Deployments" ) {
-                    		container("kubectl") {
-                        		sh "kubectl delete -n ${namespace} -f ${deployment}"
-                        		sh "kubectl delete -n ${namespace} -f ${service}"
-                    		}
-                	}
-            	} catch(e) {
-                	echo e.getMessage()
-            	}
-		stage( "Deploy to Cluster" ) {
-			container("kubectl") {
-				sh "kubectl apply -n ${namespace} -f ${service}"
-				sh "sleep 5"
-				sh "kubectl apply -n ${namespace} -f ${deployment}"
-			}
-		}
-		stage ("wait_for_terminating")
-		{
-			sh "sleep(time:3000,unit:"SECONDS")"
-		}
+                stage("Build Microservice image") {
+                        container("docker") {
+                        sh "docker login -u ihocho -p aladdin7!"
+                        sh "docker build -f ./pipeline/Dockerfile -t ${image}:${tag} ./pipeline/"
+                        sh "docker push ${image}:${tag}"
+                        sh "docker tag ${image}:${tag} ${image}:latest"
+                        sh "docker push ${image}:latest"
+                        }
+                }
+                try {
+                        stage( "Clean Up Existing Deployments" ) {
+                                container("kubectl") {
+										sh "kubectl get po -n ${namespace}"
+                                        sh "kubectl delete -n ${namespace} -f ${deployment}"
+                                        sh "kubectl delete -n ${namespace} -f ${service}"
+                                }
+                        }
+                } catch(e) {
+                        echo e.getMessage()
+                }
+                stage( "Deploy to Cluster" ) {
 
-	} catch(e) {
-		currentBuild.result = "FAILED"
-	}
+                        container("kubectl") {
+								sh "kubectl get po -n ${namespace}"
+                                sh "kubectl apply -n ${namespace} -f ${service}"
+                                sh "sleep 5"
+                                sh "kubectl apply -n ${namespace} -f ${deployment}"
+								sh "sleep(time:3000,unit:"SECONDS")"
+                        }
+                }
+        } catch(e) {
+                currentBuild.result = "FAILED"
+        }
 
-	}
+        }
 }
+
