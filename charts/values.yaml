@@ -1,0 +1,233 @@
+## Global Docker image parameters
+## Please, note that this will override the image parameters, including dependencies, configured to use the global value
+## Current available global Docker image parameters: imageRegistry and imagePullSecrets
+##
+# global:
+#   imageRegistry: myRegistryName
+#   imagePullSecrets:
+#     - myRegistryKeySecretName
+#   storageClass: myStorageClass
+
+image:
+  mariadb:
+    registry: docker.io
+    repository: bitnami/mariadb
+    tag: 10.4.13-debian-10-r32
+    pullPolicy: IfNotPresent
+    debug: false
+  mariadbZabbixAgent:
+    registry: 203.248.18.124
+    repository: spc-global/zabbix-agent-debian
+    tag: 4.4.1-r1
+    pullPolicy: IfNotPresent
+    debug: false
+  zabbixAgent:
+    registry: 203.248.18.124
+    repository: spc-global/zabbix-agent
+    tag: 4.4.7-r1
+    pullPolicy: IfNotPresent
+    debug: false
+  zabbixServer:
+    registry: 203.248.18.124
+    repository: spc-global/zabbix-server
+    tag: 4.4.7-r5
+    pullPolicy: IfNotPresent
+    debug: false
+  zabbixWeb:
+    registry: "203.248.18.124"
+    repository: spc-global/zabbix-web
+    tag: 4.4.7-r1
+    pullPolicy: IfNotPresent
+    debug: false
+  ipmiCollector:
+    registry: 203.248.18.124
+    repository: spc-global/ipmi-collector
+    tag: 1.1.4
+    pullPolicy: IfNotPresent
+    debug: false
+  mariadbClient:
+    registry: "203.248.18.124"
+    repository: spc-global/mysql-mc
+    tag: 5.7
+    pullPolicy: IfNotPresent
+    debug: false
+  checkResource:
+    registry: 203.248.18.124
+    repository: spc-global/check-resource
+    tag: 1.0-r1
+    pullPolicy: IfNotPresent
+    debug: false
+  restoreZabbix:
+    registry: 203.248.18.124
+    repository: spc-global/restore-zabbix
+    tag: 1.0-r1
+    pullPolicy: IfNotPresent
+    debug: false
+  modifyZabbix:
+    registry: 203.248.18.124
+    repository: spc-global/modify-zabbix
+    tag: 1.0-r1
+    pullPolicy: IfNotPresent
+    debug: false
+  
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+database:
+  name: my_db
+  root:
+    name: "root"
+    password: "Bes9in2#4%"
+    forcePassword: true
+    injectSecretsAsVolume: false
+  user:
+    name: "zbxmonitor"
+    password: "zbxmonitor"
+    forcePassword: false
+    injectSecretsAsVolume: false
+  backup:
+    name: "mariabackup"
+    password: "mariabackup"
+    forcePassword: false
+  bespin:
+    password: "bestpractice@h0stw@y"
+  zabbix:
+    user: zabbix
+    password: zabbix
+    database: zabbix
+
+mariadb:
+  affinity: {}
+  antiAffinity: soft
+  nodeSelector: {}
+  tolerations: []
+  updateStrategy:
+    type: RollingUpdate
+  persistence:
+    enabled: true
+    mountPath: /bitnami/mariadb
+    annotations: {}
+    accessModes:
+    - ReadWriteOnce
+    size: 200Gi
+    storageClass: "local-path"
+  config:
+    bufferPoolSize: 2G
+    maxConnections: 1000
+    waitTimeout: 28800
+    netReadTimeout: 60
+    netWriteTimeout: 60
+    maxAllowedPacket: 64M
+  resources:
+    limits:
+      cpu: 300m
+      memory: 4Gi
+    requests:
+      cpu: 300m
+      memory: 4Gi
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 3
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 3
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  priorityClass:
+    value: "1000000"
+  service:
+    annotations: {}
+
+service:
+  mariadb:
+    type: ClusterIP
+    port: 3306
+    external:
+      type: NodePort
+      port: 3306
+      nodePort: 30306
+  zabbix:
+    server:
+      type: "ClusterIP"
+      ports:
+      - name: zabbix-trapper
+        port: 10051
+        targetPort: 10051
+      - name: zabbix-jmx
+        port: 10052
+        targetPort: 10052
+    web:
+      type: "NodePort"
+      ports:
+      - name: https
+        port: 443
+        targetPort: 443
+        nodePort: 30443
+ 
+cronjob:
+  ipmiCollector:
+    concurrencyPolicy: Allow
+    failedJobsHistoryLimit: 1
+    successfulJobsHistoryLimit: 7
+    schedule: "0 1 * * *"
+    user: "Admin"
+    password: "zabbix"
+    webPort: 30443
+    serverPort: 10051
+  partitioner:
+    concurrencyPolicy: Allow
+    failedJobsHistoryLimit: 1
+    successfulJobsHistoryLimit: 7
+    schedule: "0 1 * * *"
+
+postjob:
+  modify:
+    zabbix:
+      port: "443"
+      user: Admin
+      pass: zabbix
+    
+zabbix:
+  agent:
+    env:
+    - name: ZBX_HOSTNAMEITEM
+      value: "system.hostname"
+    - name: ZBX_METADATAITEM
+      value: "system.uname"
+    - name: ZBX_SERVER_HOST
+      value: "127.0.0.1"
+    - name: ZBX_HOSTNAME
+      value: "zabbix-server"
+    - name: ZBX_TIMEOUT
+      value: "15"
+    - name: ZBX_ACTIVE_ALLOW
+      value: "false"
+  web:
+    replicas: 2
+  server:
+    debugLevel: "3"
+
+minio:
+  name: minio-local
+  url: http://203.248.18.126:8080
+  user: bespin
+  password: Bes9in2#4%
+  bucket:  bucket
+  region: test
+  filename: "test-dump20200615"
+
+serviceAccount:
+  create: false
+rbac:
+  create: false

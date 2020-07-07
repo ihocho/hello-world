@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-modify
+  labels:
+    app: {{ .Release.Name }}-modify
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      name: {{ .Release.Name }}-modify
+      labels:
+        app: {{ .Release.Name }}-modify
+        chart: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      initContainers:
+      - name: check-resource
+        image: {{ template "check.resource.image" . }}
+        imagePullPolicy: {{ .Values.image.checkResource.pullPolicy | quote }}
+        command:
+          - python
+        args:
+          - /python/check-resources.py
+        env:
+        - name: NAMESPACE
+          value: {{ .Release.Namespace }}
+        - name: RESOURCE
+          value: service
+        - name: DEPLOY_NAME
+          value: {{ .Release.Name }}-web
+        - name: SERVICE_URL
+          value: "https://{{ .Release.Name }}-web:{{ .Values.postjob.modify.zabbix.port }}/zabbix/api_jsonrpc.php"
+        - name: ZABBIX_USER
+          value: {{ .Values.postjob.modify.zabbix.user }}
+        - name: ZABBIX_PASS
+          value: {{ .Values.postjob.modify.zabbix.pass }}
+      containers:
+      - name: modify-zabbix
+        image: {{ template "modify.zabbix.image" . }}
+        imagePullPolicy: {{ .Values.image.modifyZabbix.pullPolicy | quote }}
+        command:
+        securityContext:
+          privileged: true
+        command:
+        - 'bash'
+        - '-c'
+        - 'bash /scripts/modify-zabbix.sh;'
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: {{ .Values.database.root.password }}
+        - name: DB_HOST
+          value: {{ .Release.Name }}-db
+  backoffLimit: 3
+  completions: 1
+  parallelism: 1

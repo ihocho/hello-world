@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-restore
+  labels:
+    app: {{ .Release.Name }}-restore
+    chart: {{ .Release.Name }}
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      name: {{ .Release.Name }}-restore
+      labels:
+        app: {{ .Release.Name }}-restore
+        chart: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Release.Name }}-sa
+      initContainers:
+      - name: check-resource
+        image: {{ template "check.resource.image" . }}
+        imagePullPolicy: {{ .Values.image.checkResource.pullPolicy | quote }}
+        command:
+          - python
+        args:
+          - /python/check-resources.py
+        env:
+          - name: NAMESPACE
+            value: {{ .Release.Namespace }}
+          - name: RESOURCE
+            value: statefulset
+          - name: DEPLOY_NAME
+            value: {{ .Release.Name }}-db
+      containers:
+      - name: restore-zabbix
+        image: {{ template "restore.zabbix.image" . }}
+        imagePullPolicy: {{ .Values.image.restoreZabbix.pullPolicy | quote }}
+        securityContext:
+          privileged: true
+        command:
+        - 'bash'
+        - '-c'
+        - 'bash /scripts/restore-zabbix.sh;sleep 10'
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: {{ .Values.database.root.password }}
+        - name: DB_HOST
+          value: {{ .Release.Name }}-db
+        - name: BESPIN_PASS
+          value: {{ .Values.database.bespin.password }}
+        - name: ZBXMONITOR_USER
+          value: {{ .Values.database.user.name }}
+        - name: ZBXMONITOR_PASS
+          value: {{ .Values.database.user.password }}
+        - name: "MINIO_NAME"
+          value: {{ .Values.minio.name }}
+        - name: "MINIO_URL"
+          value: {{ .Values.minio.url }}
+        - name: "MINIO_USER"
+          value: {{ .Values.minio.user }}
+        - name: "MINIO_PASS"
+          value: {{ .Values.minio.password }}
+        - name: "MINIO_BUCKET"
+          value: {{ .Values.minio.bucket }}
+        - name: "MINIO_REGION"
+          value: {{ .Values.minio.region }}
+        - name: "MINIO_FILENAME"
+          value: {{ .Values.minio.filename }}
+      restartPolicy: Never
+  backoffLimit: 3
+  completions: 1
+  parallelism: 1

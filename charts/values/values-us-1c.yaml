@@ -1,0 +1,74 @@
+mariadb:
+  persistence:
+    accessModes:
+    - ReadWriteMany
+    storageClass: "kadalu.replica3"
+    size: 160Gi
+  config:
+    bufferPoolSize: 20G
+    waitTimeout: 900
+    maxAllowedPacket: 128M
+  resources:
+    limits:
+      cpu: 2500m
+      memory: 24Gi
+    requests:
+      cpu: 2500m
+      memory: 24Gi
+
+service:
+  mariadb:
+     external:
+      type: LoadBalancer
+      loadBalancerIP: 10.143.0.251
+      nodePort: 30306
+  zabbix:
+    web:
+      type: LoadBalancer
+      loadBalancerIP: 10.143.0.241
+      ports:
+      - name: https
+        port: 30443
+        targetPort: 443
+        nodePort: 30443
+
+postjob:
+  modify:
+    zabbix:
+      port: 30443
+      user: Admin
+      pass: Bes9in2#4%
+
+cronjob:
+  ipmiCollector:
+    port: 30443
+    password: "Bes9in2#4%"
+
+zabbix:
+  server:
+    env:
+    - name: ZBX_SERVER_NAME
+      value: "SPC-US-1C-Zabbix"
+    - name: ZBX_STARTPOLLERS
+      value: "500"
+    - name: ZBX_IPMIPOLLERS
+      value: "20"
+    - name: ZBX_STARTPOLLERSUNREACHABLE
+      value: "10"
+    - name: WEBHOOK_URL1
+      value: "https://hooks.slack.com/services/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"
+    - name: WEBHOOK_URL2
+      value: "https://hooks.slack.com/services/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"
+    - name: SLACK_CHANNEL1
+      value: "alerts-zbx-us-prd"
+    - name: SLACK_CHANNEL2
+      value: "alerts-zbx-us-prd-ag"
+    - name: ZBX_WEB_IP
+      value: "10.143.0.241"
+    - name: ZBX_WEB_PORT
+      value: "30443"
+
+minio:
+  region: us
+  filename:
+

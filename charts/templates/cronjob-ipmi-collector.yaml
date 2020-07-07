@@ -1,0 +1,23 @@
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-ipmi-collector
+  labels:
+    app: {{ .Release.Name }}-ipmi-collector
+    chart: {{ .Release.Name }}
+spec:
+  successfulJobsHistoryLimit: {{ .Values.cronjob.ipmiCollector.historyLimit }}
+  schedule: {{ .Values.cronjob.ipmiCollector.schedule }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: ipmi-collector
+            image: {{ template "ipmi.collector.image" . }}
+            command: ["python", "IpmiCollector.py"]
+            args: ["-wIp", "{{ .Release.Name }}-web", "-wPort", "{{ .Values.cronjob.ipmiCollector.webPort }}","-sIp", "{{ .Release.Name }}-server", "-sPort", "{{ .Values.cronjob.ipmiCollector.serverPort }}", "-u", "{{ .Values.cronjob.ipmiCollector.user }}", "-p", "{{ .Values.cronjob.ipmiCollector.password }}"]
+            imagePullPolicy: {{ .Values.image.ipmiCollector.pullPolicy | quote }}
+          restartPolicy: OnFailure
+

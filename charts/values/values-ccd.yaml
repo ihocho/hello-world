@@ -1,0 +1,31 @@
+service:
+  mariadb:
+    external:
+      type: NodePort
+      nodePort: 31306
+  zabbix:
+    web:
+      type: "NodePort"
+      ports:
+      - name: https
+        port: 443
+        targetPort: 443
+        nodePort: 31043
+
+zabbix:
+  server:
+    env:
+    - name: ZBX_SERVER_NAME
+      value: "SPC-Test-Zabbix"
+    - name: ZBX_WEB_IP
+      value: "203.248.18.121"
+    - name: ZBX_WEB_PORT
+      value: "31043"
+
+minio:
+  region: test
+  filename: 
+
+cronjob:
+  ipmiCollector:
+    webPort: 31043

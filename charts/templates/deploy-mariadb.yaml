@@ -1,0 +1,275 @@
+{{- if .Values.mariadb.podDisruptionBudget.enabled }}
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-pdb
+  labels:
+    app: {{ .Release.Name }}-pdb
+    chart: {{ .Release.Name }}
+spec:
+{{- if .Values.mariadb.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.mariadb.podDisruptionBudget.minAvailable }}
+{{- end }}
+{{- if .Values.mariadb.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.mariadb.podDisruptionBudget.maxUnavailable }}
+{{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-db
+{{- end }}
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ .Release.Name }}-pc
+  labels:
+    app: {{ .Release.Name }}-pc
+    chart: {{ .Release.Name }}
+value: {{ .Values.mariadb.priorityClass.value }}
+preemptionPolicy: Never
+globalDefault: false
+description: "This pod priors to other pods"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name  }}-db
+  labels:
+    app: {{ .Release.Name }}-db
+    chart: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-db
+  serviceName: {{ .Release.Name }}-db
+  replicas: 1
+  updateStrategy:
+    type: {{ .Values.mariadb.updateStrategy.type }}
+    {{- if (eq "Recreate" .Values.mariadb.updateStrategy.type) }}
+    rollingUpdate: null
+    {{- end }}
+  template:
+    metadata:
+      {{- with .Values.mariadb.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app: {{ .Release.Name }}-db
+        chart: {{ .Release.Name }}
+    spec:
+      priorityClassName: {{ .Release.Name }}-pc
+      serviceAccountName: {{ template "mariadb.serviceAccountName" . }}
+      {{- if .Values.securityContext.enabled }}
+      securityContext:
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+      {{- end }}    
+      {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName | quote }}
+      {{- end }}
+      {{- if eq .Values.mariadb.antiAffinity "hard" }}
+      affinity:
+      {{- with .Values.mariadb.affinity  }}
+{{ toYaml . | indent 8 }}
+      {{- end }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchLabels:
+                  app: {{ .Release.Name }}-db
+      {{- else if eq .Values.mariadb.antiAffinity "soft" }}
+      affinity:
+      {{- with .Values.mariadb.affinity  }}
+{{ toYaml . | indent 8 }}
+      {{- end }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: {{ .Release.Name }}-db
+      {{- else}}
+      {{- with .Values.mariadb.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+
+      {{- if .Values.mariadb.nodeSelector }}
+      nodeSelector: {{ toYaml .Values.mariadb.nodeSelector | nindent 8 }}
+      {{- end -}}
+      {{- with .Values.mariadb.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+{{- include "mariadb.imagePullSecrets" . | indent 6 }}
+      initContainers:
+      - name: mariadb-prepare
+        image: busybox:1.28
+        command: ['sh', '-c', 'rm -rf /mariadb/*']
+        resources:
+          limits:
+            cpu: 50m
+            memory: 50Mi
+          requests:
+            cpu: 50m
+            memory: 50Mi
+        volumeMounts:
+        - name: data
+          mountPath: /mariadb
+      containers:
+        - name: "mariadb"
+          image: {{ template "mariadb.image" . }}
+          imagePullPolicy: {{ .Values.image.mariadb.pullPolicy | quote }}
+          env:
+            {{- if .Values.image.mariadb.debug}}
+            - name: BITNAMI_DEBUG
+              value: "true"
+            {{- end }}
+            
+            {{- if .Values.mariadb.extraFlags }}
+            - name: MARIADB_EXTRA_FLAGS
+              value: "{{ .Values.mariadb.extraFlags }}"
+            {{- end }}
+
+            {{- if .Values.database.root.injectSecretsAsVolume }}
+            - name: MARIADB_ROOT_PASSWORD_FILE
+              value: "/opt/bitnami/mariadb/secrets/mariadb-root-password"
+            {{- else }}
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secret
+                  key: mariadb-root-password
+            {{- end }}
+
+            {{- if not (empty .Values.database.user.name) }}
+            - name: MARIADB_USER
+              value: "{{ .Values.database.user.name }}"
+            {{- if .Values.database.user.injectSecretsAsVolume }}
+            - name: MARIADB_PASSWORD_FILE
+              value: "/opt/bitnami/mariadb/secrets/mariadb-password"
+            {{- else }}
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-secret
+                  key: mariadb-password
+            {{- end }}
+            {{- end }}
+
+            - name: MARIADB_DATABASE
+              value: "{{ .Values.database.name }}"
+
+          ports:
+            - name: mysql
+              containerPort: 3306
+
+          {{- if .Values.mariadb.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  password_aux="${MARIADB_ROOT_PASSWORD:-}"
+                  if [ -f "${MARIADB_ROOT_PASSWORD_FILE:-}" ]; then
+                      password_aux=$(cat $MARIADB_ROOT_PASSWORD_FILE)
+                  fi
+                  exec mysqladmin status -uroot -p$password_aux
+            initialDelaySeconds: {{ .Values.mariadb.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.mariadb.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.mariadb.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.mariadb.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.mariadb.livenessProbe.failureThreshold }}
+          {{- end }}
+          
+          
+          {{- if .Values.mariadb.readinessProbe.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  password_aux="${MARIADB_ROOT_PASSWORD:-}"
+                  if [ -f "${MARIADB_ROOT_PASSWORD_FILE:-}" ]; then
+                      password_aux=$(cat $MARIADB_ROOT_PASSWORD_FILE)
+                  fi
+                  exec mysqladmin status -uroot -p$password_aux
+            initialDelaySeconds: {{ .Values.mariadb.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.mariadb.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.mariadb.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.mariadb.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.mariadb.readinessProbe.failureThreshold }}
+          {{- end }}
+
+          {{- if .Values.mariadb.resources }}
+          resources: {{ toYaml .Values.mariadb.resources | nindent 12 }}
+
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.mariadb.persistence.mountPath }}
+              {{- if .Values.mariadb.persistence.subPath }}
+              subPath: {{ .Values.mariadb.persistence.subPath }}
+              {{- end }}
+          
+            {{- if .Values.mariadb.config }}
+            - name: config
+              mountPath: /opt/bitnami/mariadb/conf/my.cnf
+              subPath: my.cnf
+            {{- end }}
+
+        {{- if .Values.zabbix }}
+        - name: zabbix-agent
+          image: {{ template "mariadb.zabbix.agent.image" . }}
+          imagePullPolicy: {{ .Values.image.zabbixAgent.pullPolicy | quote }}
+          ports:
+          - containerPort: 10050
+            name: zabbix-agent
+
+          {{- if.Values.zabbix.agent.env}}
+          env:
+          {{- range .Values.zabbix.agent.env }}{{ $envname := .name }}
+          - name: {{ .name }}
+            value: "{{ required (printf "%s is required" $envname) .value }}"
+          {{- end }}
+          {{- end }}
+          resources:
+          resources:
+            limits:
+              cpu: 50m
+              memory: 50Mi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+        {{- end }}
+
+      volumes:
+        {{- if .Values.mariadb.config }}
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-db-conf
+        {{- end }}
+        
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: "{{ .Release.Name }}-db"
+          chart: {{ .Release.Name }}
+          release: {{ .Release.Name | quote }}
+          heritage: {{ .Release.Service | quote }}
+      spec:
+        accessModes:
+        {{- range .Values.mariadb.persistence.accessModes }}
+          - {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.mariadb.persistence.size | quote }}
+        {{ include "mariadb.storageClass" . }}
+
