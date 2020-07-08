@@ -97,7 +97,7 @@ try{
                                                 if(params.helm == "upgrade"){
                                                         stage("Upgrade Helm chart"){
                                                                 container("helm"){
-                                                                        sh "helm upgrade ${releaseName} ${helmRepository}/${helmChartName} -f ${valuesDirectory}/${valuesFileName} -n ${namespace} --timeout ${timeout} ${opts} --debug"
+                                                                        sh "helm upgrade ${releaseName} ${helmRepository}/${helmChartName} -f ${valuesDirectory}/${valuesFileName} -n ${namespace} --timeout ${timeout} --set skipInit=true ${opts} --debug"
                                                                 }
                                                         }
                                                 }
