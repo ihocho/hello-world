@@ -56,9 +56,9 @@ zabbix:
     - name: ZBX_STARTPOLLERSUNREACHABLE
       value: "20"
     - name: WEBHOOK_URL1
-      value: "https://hooks.slack.com/services/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"
+      value: "https://hooks.slack.com/services/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"
     - name: WEBHOOK_URL2
-      value: "https://hooks.slack.com/services/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"
+      value: "https://hooks.slack.com/services/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"
     - name: SLACK_CHANNEL1
       value: "alerts-zbx-kr-prd"
     - name: SLACK_CHANNEL2

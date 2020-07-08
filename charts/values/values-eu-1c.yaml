@@ -54,9 +54,9 @@ zabbix:
     - name: ZBX_IPMIPOLLERS
       value: "20"
     - name: WEBHOOK_URL1
-      value: "https://hooks.slack.com/services/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"
+      value: "https://hooks.slack.com/services/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"
     - name: WEBHOOK_URL2
-      value: "https://hooks.slack.com/services/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"
+      value: "https://hooks.slack.com/services/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"
     - name: SLACK_CHANNEL1
       value: "alerts-zbx-eu-prd"
     - name: SLACK_CHANNEL2
